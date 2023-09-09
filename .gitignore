@@ -4,3 +4,4 @@ build/
 out/
 output/
 sootOutput/
+**/*.zip
