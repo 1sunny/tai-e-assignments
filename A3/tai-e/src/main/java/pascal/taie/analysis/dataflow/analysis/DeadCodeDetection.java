@@ -33,21 +33,11 @@ import pascal.taie.analysis.graph.cfg.CFGBuilder;
 import pascal.taie.analysis.graph.cfg.Edge;
 import pascal.taie.config.AnalysisConfig;
 import pascal.taie.ir.IR;
-import pascal.taie.ir.exp.ArithmeticExp;
-import pascal.taie.ir.exp.ArrayAccess;
-import pascal.taie.ir.exp.CastExp;
-import pascal.taie.ir.exp.FieldAccess;
-import pascal.taie.ir.exp.NewExp;
-import pascal.taie.ir.exp.RValue;
-import pascal.taie.ir.exp.Var;
-import pascal.taie.ir.stmt.AssignStmt;
-import pascal.taie.ir.stmt.If;
-import pascal.taie.ir.stmt.Stmt;
-import pascal.taie.ir.stmt.SwitchStmt;
+import pascal.taie.ir.exp.*;
+import pascal.taie.ir.stmt.*;
+import pascal.taie.util.collection.Pair;
 
-import java.util.Comparator;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 public class DeadCodeDetection extends MethodAnalysis {
 
@@ -71,7 +61,124 @@ public class DeadCodeDetection extends MethodAnalysis {
         Set<Stmt> deadCode = new TreeSet<>(Comparator.comparing(Stmt::getIndex));
         // TODO - finish me
         // Your task is to recognize dead code in ir and add it to deadCode
+        Map<Stmt, Boolean> active = new HashMap<Stmt, Boolean>();
+        Map<Stmt, Boolean> visit = new HashMap<Stmt, Boolean>();
+
+        active.put(cfg.getExit(), true);
+
+        traverseCfg(cfg, cfg.getEntry(), visit, active, constants, liveVars);
+
+        cfg.forEach(stmt -> {
+            if (!active.containsKey(stmt)) {
+                deadCode.add(stmt);
+            }
+        });
         return deadCode;
+    }
+
+    private void traverseCfg(CFG<Stmt> cfg, Stmt stmt, Map<Stmt, Boolean> visit, Map<Stmt, Boolean> active, DataflowResult<Stmt, CPFact> constants, DataflowResult<Stmt, SetFact<Var>> liveVars) {
+        /**
+         *       DefinitionStmt
+         *       /         \
+         *   Invoke      AssignStmt
+         * e.g. x=f()     /       \
+         *        AssignLiteral   Copy
+         *        e.g. x = 1      e.g. x = y
+         */
+        if (visit.containsKey(stmt)) {
+            return;
+        }
+        visit.put(stmt, true);
+        // check if stmt is a assignStmt statement
+        if (stmt instanceof AssignStmt<?,?>) {
+            AssignStmt<LValue, RValue> defStmt = (AssignStmt<LValue, RValue>) stmt;
+
+            LValue lValue = defStmt.getLValue();
+            // check left side is variable & right side has no effect(e.g. may raise exception)
+            if (lValue instanceof Var && hasNoSideEffect(defStmt.getRValue())) {
+                // check left side is a live variable
+                if (liveVars.getOutFact(stmt).contains((Var) lValue)) {
+                    active.put(stmt, true);
+                }
+            } else {
+                active.put(stmt, true);
+            }
+        } else {
+            // not a assignStmt statement, it's active
+            active.put(stmt, true);
+        }
+        if (stmt instanceof If ifStmt) {
+            // check op1 & op2 are constant
+            Value v1 = constants.getInFact(stmt).get(ifStmt.getCondition().getOperand1());
+            Value v2 = constants.getInFact(stmt).get(ifStmt.getCondition().getOperand2());
+            final boolean goTrue; // lambda requires to be final or efficient final
+            final boolean goFalse;
+            if (v1.isConstant() && v2.isConstant()) {
+                if (isIfConditionTrue(ifStmt, v1, v2)) {
+                    goFalse = false;
+                    goTrue = true;
+                } else {
+                    goTrue = false;
+                    goFalse = true;
+                }
+            } else {
+                // can't decide the value of condition statement, both edge should go
+                goTrue = true;
+                goFalse = true;
+            }
+            cfg.getOutEdgesOf(stmt).forEach(stmtEdge -> {
+                if (stmtEdge.getKind() == Edge.Kind.IF_TRUE && goTrue
+                 || stmtEdge.getKind() == Edge.Kind.IF_FALSE && goFalse) {
+                    traverseCfg(cfg, stmtEdge.getTarget(), visit, active, constants, liveVars);
+                }
+            });
+        } else if (stmt instanceof SwitchStmt switchStmt) {
+            Value value = constants.getInFact(stmt).get(switchStmt.getVar());
+            if (value.isConstant()) {
+                boolean findCase = false;
+                Iterator<Pair<Integer, Stmt>> caseIterator = switchStmt.getCaseTargets().iterator();
+                // try to find a match branch
+                while (caseIterator.hasNext()) {
+                    Pair<Integer, Stmt> casePair = caseIterator.next();
+                    if (casePair.first() == value.getConstant()) {
+                        findCase = true;
+                        traverseCfg(cfg, casePair.second(), visit, active, constants, liveVars);
+                        break;
+                    }
+                }
+                if (!findCase) {
+                    // traverse default branch
+                    traverseCfg(cfg, switchStmt.getDefaultTarget(), visit, active, constants, liveVars);
+                }
+            } else {
+                // switch x, x is not a constant, traverse all out edges
+                cfg.getOutEdgesOf(stmt).forEach(stmtEdge -> traverseCfg(cfg, stmtEdge.getTarget(), visit, active, constants, liveVars));
+            }
+        } else {
+            // not if, not switch, traverse all out edges
+            cfg.getOutEdgesOf(stmt).forEach(stmtEdge -> traverseCfg(cfg, stmtEdge.getTarget(), visit, active, constants, liveVars));
+        }
+    }
+
+    /**
+     *
+     * @param ifStmt
+     * @param v1
+     * @param v2
+     * @return true if the If statement's condition is true
+     */
+    private static boolean isIfConditionTrue(If ifStmt, Value v1, Value v2) {
+        boolean conditionIsTrue;
+        switch (ifStmt.getCondition().getOperator()) {
+            case EQ -> conditionIsTrue = (v1.getConstant() == v2.getConstant());
+            case NE -> conditionIsTrue = (v1.getConstant() != v2.getConstant());
+            case LT -> conditionIsTrue = (v1.getConstant() < v2.getConstant());
+            case GT -> conditionIsTrue = (v1.getConstant() > v2.getConstant());
+            case LE -> conditionIsTrue = (v1.getConstant() <= v2.getConstant());
+            case GE -> conditionIsTrue = (v1.getConstant() >= v2.getConstant());
+            default -> throw new RuntimeException("operator no match");
+        }
+        return conditionIsTrue;
     }
 
     /**
