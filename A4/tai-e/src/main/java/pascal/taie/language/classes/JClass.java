@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  * methods and fields, etc.
  */
 public class JClass extends AbstractResultHolder implements Annotated {
-
+// 该类表示 Tai-e 中的 Java 类。每个 JClass 的实例关联着一个类并包含该类的各种信息。
     private final JClassLoader loader;
 
     private final String name;

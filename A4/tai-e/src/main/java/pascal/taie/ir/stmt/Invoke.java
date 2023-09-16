@@ -45,13 +45,13 @@ import java.util.Optional;
  */
 public class Invoke extends DefinitionStmt<Var, InvokeExp>
         implements Comparable<Invoke> {
-
+// Invoke是一种 DefinitionStmt,只不过右边是方法调用
     /**
      * The variable receiving the result of the invocation. This field
      * is null if no variable receives the invocation result, e.g., o.m(...).
      */
     @Nullable
-    private final Var result;
+    private final Var result; // 如果是赋值语句,result是等号左边的变量
 
     /**
      * The invocation expression.
@@ -61,7 +61,7 @@ public class Invoke extends DefinitionStmt<Var, InvokeExp>
     /**
      * The method containing this statement.
      */
-    private final JMethod container;
+    private final JMethod container; // 该语句所在方法
 
     public Invoke(JMethod method, InvokeExp invokeExp, @Nullable Var result) {
         this.invokeExp = invokeExp;

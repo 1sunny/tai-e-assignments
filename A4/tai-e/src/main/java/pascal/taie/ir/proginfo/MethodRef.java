@@ -42,11 +42,16 @@ import static pascal.taie.language.classes.ClassNames.METHOD_HANDLE;
 import static pascal.taie.language.classes.ClassNames.VAR_HANDLE;
 
 /**
+ * JClass getDeclaringClass:返回该方法签名的声明类，即声明该方法的类。（也就是第 7 讲课件的第 24 页中所描述的 class type）；
+ * MethodRef继承的MemberRef中有属性declaringClass表示方法签名的声明类
+ */
+
+/**
  * Represents method references in IR.
  */
 @InternalCanonicalized
 public class MethodRef extends MemberRef {
-
+// 包含了调用点所调用的目标方法的签名信息
     private static final Logger logger = LogManager.getLogger(MethodRef.class);
 
     private static final ConcurrentMap<Key, MethodRef> map =

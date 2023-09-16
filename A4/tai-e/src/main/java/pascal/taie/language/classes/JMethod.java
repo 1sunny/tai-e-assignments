@@ -42,7 +42,7 @@ import java.util.Set;
  * method body (IR), etc.
  */
 public class JMethod extends ClassMember {
-
+// 该类表示 Tai-e 中的 Java 方法。每个 JMethod 的实例关联着一个方法并包含该方法的各种信息。
     private final List<Type> paramTypes;
 
     private final Type returnType;
@@ -60,7 +60,7 @@ public class JMethod extends ClassMember {
      */
     private final Object methodSource;
 
-    private IR ir;
+    private IR ir; // IR中包含了函数的所有语句
 
     public JMethod(JClass declaringClass, String name, Set<Modifier> modifiers,
                    List<Type> paramTypes, Type returnType, List<ClassType> exceptions,
