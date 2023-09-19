@@ -33,7 +33,7 @@ import java.util.Set;
  * information of a field, including field name, type, declaring class, etc.
  */
 public class JField extends ClassMember {
-
+// ClassMember: 包含名字,修饰符,注解等
     private final Type type;
 
     public JField(JClass declaringClass, String name, Set<Modifier> modifiers,

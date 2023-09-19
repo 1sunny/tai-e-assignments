@@ -33,7 +33,7 @@ class InstanceField extends Pointer {
 
     private final Obj base;
 
-    private final JField field;
+    private final JField field; // JField: 包含名字,修饰符,注解等
 
     InstanceField(Obj base, JField field) {
         this.base = base;
