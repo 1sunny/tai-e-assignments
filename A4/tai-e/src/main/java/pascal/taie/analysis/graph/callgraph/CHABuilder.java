@@ -55,8 +55,9 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
             JMethod m = workList.poll();
             if (!callGraph.contains(m)) {
                 callGraph.addReachableMethod(m);
-
+                // callSitesIn: return the call sites within the given method.
                 callGraph.callSitesIn(m).forEach(invoke -> {
+                    // resolve: Resolves call targets (callees) of a call site via CHA.
                     Set<JMethod> T = resolve(invoke);
                     T.forEach(targetM -> {
                         callGraph.addEdge(new Edge<>(CallGraphs.getCallKind(invoke), invoke, targetM));
@@ -95,6 +96,7 @@ class CHABuilder implements CGBuilder<Invoke, JMethod> {
             Var c = ((InvokeInstanceExp) invokeExp).getBase();
             JClass receiverClass = hierarchy.getClass(c.getType().getName());
             // foreach c' that is a subclass of c or c itself do: add Dispatch(c',m) to T
+            // 因为 virtual调用时,receiverClass对象(c)可能指向它自己和它所有子类,所以要 getSubClasses
             getSubClasses(receiverClass).forEach(jClass -> {
                 JMethod dispatched = dispatch(jClass, m);
                 if (dispatched != null) {
