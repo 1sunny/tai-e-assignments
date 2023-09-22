@@ -107,6 +107,19 @@ class Solver {
         // 假如有非静态字段 a和 b, a = b会被转化为 temp$0 = b; a = temp$0;
 
         // 静态字段在声明时就初始化不会被加入指针集,clinit函数没被调用,不知道为什么...
+        // 1: class A {
+        // 2:      static int one = 1; // field initializer
+        // 3:      static int two;
+        // 4:
+        // 5:      static { // static initializer
+        // 6:          one = 1; // generated for field initializer at line 2
+        // 7:          two = 2;
+        // 8:      }
+        // 9:  }
+        // 具体而言，第 2 行的静态字段初始化会被编译为一个静态初始化块（5 - 8 行）中的 store 语句（第 6 行），\
+        // 因此仅处理静态初始化块即可。然而，本次作业中的 call graph builder 并不处理静态初始化块（但在 Tai-e 中它们会被正确处理），
+        // 因此这些 store 语句在 ICFG 上是不可达的。简单起见，我们在本次作业中忽略字段的初始化和静态初始化块。
+
         // 在函数中赋值会通过和非静态字段一样的处理方式完成
 
         // TODO addReachable x = y addEdge可以放到analysis?
