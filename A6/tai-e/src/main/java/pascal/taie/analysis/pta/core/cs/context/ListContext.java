@@ -32,7 +32,10 @@ import java.util.List;
  * @param <T> type of context elements
  */
 public class ListContext<T> implements Context {
-
+// 该类实现了 Context 接口，它将每个上下文表示为一个由若干同类型元素组成的有序列表
+// （对三种上下文敏感策略，该列表分别采用不同的元素来表示上下文：调用点敏感使用的元素为 Invoke，
+// 对象敏感使用的元素为 Obj，类型敏感使用的元素为 Type）。该类提供一系列静态工厂方法，
+// 即 make(...) 方法来创建上下文，你需要利用这些方法来完成上面提到的六个上下文 selector。
     /**
      * The empty context.
      */

@@ -29,7 +29,7 @@ import pascal.taie.analysis.pta.core.heap.Obj;
  * Represents context-sensitive objects.
  */
 public class CSObj extends AbstractCSElement {
-
+// 表示一个带上下文（Context）的抽象对象（Obj）
     private final Obj obj;
 
     CSObj(Obj obj, Context context) {

@@ -44,18 +44,34 @@ public class _2CallSelector implements ContextSelector {
     @Override
     public Context selectContext(CSCallSite callSite, JMethod callee) {
         // TODO - finish me
-        return null;
+        return selectContext(callSite, null, callee);
     }
 
     @Override
     public Context selectContext(CSCallSite callSite, CSObj recv, JMethod callee) {
         // TODO - finish me
-        return null;
+        Context c = callSite.getContext();
+        if (c.getLength() > 0) {
+            return ListContext.make(c.getElementAt(c.getLength() - 1), callSite.getCallSite());
+        }
+        return ListContext.make(callSite.getCallSite());
     }
 
+    /**
+     * Selects heap contexts for new-created abstract objects.
+     *
+     * @param method the (context-sensitive) method that contains the
+     *               allocation site of the new-created object.
+     * @param obj    the new-created object.
+     * @return the heap context for the object.
+     */
     @Override
     public Context selectHeapContext(CSMethod method, Obj obj) {
         // TODO - finish me
-        return null;
+        Context c = method.getContext();
+        if (c.getLength() > 0) {
+            return ListContext.make(c.getElementAt(c.getLength() - 1));
+        }
+        return getEmptyContext();
     }
 }

@@ -35,7 +35,12 @@ import java.util.Collection;
  * Manages context-sensitive elements and pointers in pointer analysis.
  */
 public interface CSManager {
-
+// MapBasedCSManager implements CSManager
+// public CSVar getCSVar(Context context, Var var) {
+//     return (CSVar)this.vars.computeIfAbsent(var, context, (v, c) -> {
+//         return (CSVar)this.initializePointsToSet(new CSVar(v, c));
+//     });
+// }
     /**
      * @return a context-sensitive variable for given context and variable.
      */

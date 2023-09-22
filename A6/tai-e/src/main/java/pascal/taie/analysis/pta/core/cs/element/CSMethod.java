@@ -38,7 +38,7 @@ import java.util.function.Supplier;
  * Represents context-sensitive methods.
  */
 public class CSMethod extends AbstractCSElement {
-
+// 表示一个带上下文（Context）的方法（JMethod）
     private final JMethod method;
 
     /**

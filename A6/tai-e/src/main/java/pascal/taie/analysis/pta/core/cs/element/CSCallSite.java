@@ -34,7 +34,7 @@ import java.util.Set;
  * Represents context-sensitive call sites.
  */
 public class CSCallSite extends AbstractCSElement {
-
+// 表示一个带上下文（Context）的调用点（Invoke）
     private final Invoke callSite;
 
     /**

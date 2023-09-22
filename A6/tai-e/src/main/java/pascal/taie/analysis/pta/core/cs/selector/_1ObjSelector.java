@@ -40,21 +40,22 @@ public class _1ObjSelector implements ContextSelector {
         return ListContext.make();
     }
 
+// 在对象敏感和类型敏感中，处理静态方法调用时简单直接地使用调用者方法的上下文作为被调用方法的上下文。
     @Override
     public Context selectContext(CSCallSite callSite, JMethod callee) {
         // TODO - finish me
-        return null;
+        return callSite.getContext();
     }
 
     @Override
     public Context selectContext(CSCallSite callSite, CSObj recv, JMethod callee) {
         // TODO - finish me
-        return null;
+        return ListContext.make(recv.getObject());
     }
 
     @Override
     public Context selectHeapContext(CSMethod method, Obj obj) {
         // TODO - finish me
-        return null;
+        return getEmptyContext();
     }
 }

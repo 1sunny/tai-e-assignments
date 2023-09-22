@@ -30,7 +30,7 @@ import pascal.taie.language.type.Type;
  * Represents context-sensitive variables.
  */
 public class CSVar extends AbstractPointer implements CSElement {
-
+// 表示一个带上下文（Context）的变量（Var）
     private final Var var;
 
     private final Context context;
