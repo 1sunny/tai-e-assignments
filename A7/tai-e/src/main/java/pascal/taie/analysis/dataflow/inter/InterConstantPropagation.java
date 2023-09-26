@@ -66,6 +66,28 @@ public class InterConstantPropagation extends
 
     private Map<Var, List<StoreArray>> aliasStoreArray;
 
+    // 这样做会丢失精度
+    // class My {
+    //     public static void main(String[] args) {
+    //         A a1 = new B();
+    //         a1.f = 111;
+    //         B b1 = (B)a1;
+    //         int x = b1.f;
+    //     }
+    // }
+    // class A {
+    //     int f;
+    // }
+    // class B extends A {
+    //
+    // }
+    private <T> List<T> getStmtList(Var base, Map<Var, List<T>> map) {
+        if (!map.containsKey(base)) {
+            return List.of(); // ImmutableCollections.EMPTY_LIS
+        }
+        return map.get(base);
+    }
+
     public InterConstantPropagation(AnalysisConfig config) {
         super(config);
         cp = new ConstantPropagation(new AnalysisConfig(ConstantPropagation.ID));
@@ -173,7 +195,7 @@ public class InterConstantPropagation extends
             Var base = instanceFieldAccess.getBase();
             Value res = Value.getUndef();
 
-            List<StoreField> storeFields = aliasStoreField.get(base);
+            List<StoreField> storeFields = getStmtList(base, aliasStoreField);
 
             for (int i = 0; i < storeFields.size(); i++) {
                 StoreField storeField = storeFields.get(i);
@@ -189,7 +211,7 @@ public class InterConstantPropagation extends
             Value indexI = in.get(arrayAccess.getIndex());
 
             Value res = Value.getUndef();
-            List<StoreArray> storeArrays = aliasStoreArray.get(base);
+            List<StoreArray> storeArrays = getStmtList(base, aliasStoreArray);
             for (int i = 0; i < storeArrays.size(); i++) {
                 StoreArray storeArray = storeArrays.get(i);
                 ArrayAccess aliasArrayAccess = storeArray.getArrayAccess();
@@ -249,7 +271,7 @@ public class InterConstantPropagation extends
                     Map<JField, Value> valueMap = instanceFieldValue.get(base);
                     if (!valueMap.containsKey(jField) || valueMap.get(jField) != evaluated) {
                         valueMap.put(jField, evaluated);
-                        List<LoadField> loadFields = aliasLoadField.get(base);
+                        List<LoadField> loadFields = getStmtList(base, aliasLoadField);
                         for (LoadField loadField : loadFields) {
                             if (!solver.getWorkList().contains(loadField)) {
                                 solver.getWorkList().add(loadField);
@@ -278,7 +300,7 @@ public class InterConstantPropagation extends
                     Var base = arrayAccess.getBase();
                     Var index = arrayAccess.getIndex();
                     Value indexI = in.get(index);
-                    List<LoadArray> loadArrays = aliasLoadArray.get(base);
+                    List<LoadArray> loadArrays = getStmtList(base, aliasLoadArray);
 
                     if (!arrayValue.containsKey(base)) {
                         arrayValue.put(base, new HashMap<>());
