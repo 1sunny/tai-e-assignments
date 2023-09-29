@@ -1,5 +1,8 @@
 **If you are really stuck with some hidden test cases, I hope this can help you**
 <br>
+I provide a script for each Lab that packages the files that need to be submitted.
+<br>
+They are in `Tai-e-assignments/A*/tai-e/submit.sh`, you can run `./submit.sh` in the `Tai-e-assignments/A*/tai-e` path.
 <br>
 <br>
 <div align="center">
