@@ -52,12 +52,6 @@ public class InterConstantPropagation extends
 
     private final ConstantPropagation cp;
 
-    private Map<Var, Map<JField, Value>> instanceFieldValue;
-
-    private Map<JField, Value> staticFieldValue;
-
-    private Map<Var, Map<Var, Value>> arrayValue;
-
     private Map<Var, List<StoreField>> aliasStoreField;
 
     private Map<Var, List<LoadField>> aliasLoadField;
@@ -101,9 +95,6 @@ public class InterConstantPropagation extends
         String ptaId = getOptions().getString("pta");
         PointerAnalysisResult pta = World.get().getResult(ptaId);
         // You can do initialization work here
-        instanceFieldValue = new HashMap<>();
-        staticFieldValue = new HashMap<>();
-        arrayValue = new HashMap<>();
 
         aliasLoadField = new HashMap<>();
         aliasStoreField = new HashMap<>();
@@ -180,8 +171,9 @@ public class InterConstantPropagation extends
         // TODO 2.找到所有别名，为什么别名一定会也是InstanceFieldAccess，而不会是Var
         // TODO 3.找到所有和别名相关的赋值语句
         */
+        Value res;
         if (exp instanceof StaticFieldAccess staticFieldAccess) {
-            Value res = Value.getUndef();
+            res = Value.getUndef();
             for (Stmt stmt : icfg) {
                 if (stmt instanceof StoreField storeField
                  && storeField.isStatic()
@@ -190,30 +182,26 @@ public class InterConstantPropagation extends
                     res = cp.meetValue(res, value);
                 }
             }
-            return res;
         } else if (exp instanceof InstanceFieldAccess instanceFieldAccess) {
+            res = Value.getUndef();
             Var base = instanceFieldAccess.getBase();
-            Value res = Value.getUndef();
 
             List<StoreField> storeFields = getStmtList(base, aliasStoreField);
 
-            for (int i = 0; i < storeFields.size(); i++) {
-                StoreField storeField = storeFields.get(i);
+            for (StoreField storeField : storeFields) {
                 FieldAccess fieldAccess = storeField.getFieldAccess();
-                if (fieldAccess instanceof InstanceFieldAccess) {
+                if (fieldAccess instanceof InstanceFieldAccess && fieldAccess.getFieldRef().resolve() == instanceFieldAccess.getFieldRef().resolve()) {
                     Value value = solver.getResult().getInFact(storeField).get(storeField.getRValue());
                     res = cp.meetValue(res, value);
                 }
             }
-            return res;
         } else if (exp instanceof ArrayAccess arrayAccess) {
+            res = Value.getUndef();
             Var base = arrayAccess.getBase();
             Value indexI = in.get(arrayAccess.getIndex());
 
-            Value res = Value.getUndef();
             List<StoreArray> storeArrays = getStmtList(base, aliasStoreArray);
-            for (int i = 0; i < storeArrays.size(); i++) {
-                StoreArray storeArray = storeArrays.get(i);
+            for (StoreArray storeArray : storeArrays) {
                 ArrayAccess aliasArrayAccess = storeArray.getArrayAccess();
                 Value indexJ = solver.getResult().getInFact(storeArray).get(aliasArrayAccess.getIndex());
 
@@ -222,10 +210,10 @@ public class InterConstantPropagation extends
                     res = cp.meetValue(res, value);
                 }
             }
-            return res;
         } else {
-            return Value.getNAC();
+            res = Value.getNAC();
         }
+        return res;
     }
 
     private boolean isArrayIndexAlias(Value indexI, Value indexJ) {
@@ -264,59 +252,31 @@ public class InterConstantPropagation extends
                 if (lValue instanceof InstanceFieldAccess instanceFieldAccess) {
                     Var base = instanceFieldAccess.getBase();
                     JField jField = instanceFieldAccess.getFieldRef().resolve();
-                    evaluated = cp.evaluate(rValue, copy_in);
-                    if (!instanceFieldValue.containsKey(base)) {
-                        instanceFieldValue.put(base, new HashMap<>());
-                    }
-                    Map<JField, Value> valueMap = instanceFieldValue.get(base);
-                    if (!valueMap.containsKey(jField) || valueMap.get(jField) != evaluated) {
-                        valueMap.put(jField, evaluated);
-                        List<LoadField> loadFields = getStmtList(base, aliasLoadField);
-                        for (LoadField loadField : loadFields) {
-                            if (!solver.getWorkList().contains(loadField)) {
-                                solver.getWorkList().add(loadField);
-                            }
+                    List<LoadField> loadFields = getStmtList(base, aliasLoadField);
+                    for (LoadField loadField : loadFields) {
+                        if (loadField.getFieldRef().resolve() == jField && !solver.getWorkList().contains(loadField)) {
+                            solver.getWorkList().add(loadField);
                         }
                     }
                 } else if (lValue instanceof StaticFieldAccess staticFieldAccess) {
-                    evaluated = evaluate(rValue, copy_in);
                     for (Stmt st : icfg) {
-                        if (st instanceof StoreField storeField
-                         && storeField.isStatic()) {
-                            JField jField = storeField.getFieldRef().resolve();
+                        if (st instanceof LoadField loadField
+                         && loadField.isStatic()) {
+                            JField jField = loadField.getFieldRef().resolve();
                             if (jField == staticFieldAccess.getFieldRef().resolve()) {
-                                if (!staticFieldValue.containsKey(jField)
-                                  || staticFieldValue.get(jField) != evaluated) {
-                                    staticFieldValue.put(jField, evaluated);
-                                    if (!solver.getWorkList().contains(storeField)) {
-                                        solver.getWorkList().add(storeField);
-                                    }
+                                if (!solver.getWorkList().contains(loadField)) {
+                                    solver.getWorkList().add(loadField);
                                 }
                             }
                         }
                     }
                 } else if (lValue instanceof ArrayAccess arrayAccess) {
-                    evaluated = evaluate(rValue, copy_in);
                     Var base = arrayAccess.getBase();
-                    Var index = arrayAccess.getIndex();
-                    Value indexI = in.get(index);
                     List<LoadArray> loadArrays = getStmtList(base, aliasLoadArray);
 
-                    if (!arrayValue.containsKey(base)) {
-                        arrayValue.put(base, new HashMap<>());
-                    }
-                    Map<Var, Value> varValueMap = arrayValue.get(base);
-                    if (!varValueMap.containsKey(index) || varValueMap.get(index) != evaluated) {
-                        varValueMap.put(index, evaluated);
-
-                        for (LoadArray loadArray : loadArrays) {
-                            Var index1 = loadArray.getArrayAccess().getIndex();
-                            Value indexJ = solver.getResult().getInFact(loadArray).get(index1);
-
-                            if (isArrayIndexAlias(indexI, indexJ)
-                             && !solver.getWorkList().contains(loadArray)) {
-                                solver.getWorkList().add(loadArray);
-                            }
+                    for (LoadArray loadArray : loadArrays) {
+                        if (!solver.getWorkList().contains(loadArray)) {
+                            solver.getWorkList().add(loadArray);
                         }
                     }
                 }
@@ -399,3 +359,4 @@ public class InterConstantPropagation extends
         return fact;
     }
 }
+// TODO 遇到 storeXxx时,就直接把所有别名的 LoadXxx加入 workList会死循环吗? 提交上去倒是不会,是因为 LoadXxx如果 CPFact没有发生改变就不会加入后继?
