@@ -45,6 +45,8 @@ import pascal.taie.analysis.pta.plugin.taint.TaintAnalysiss;
 import pascal.taie.analysis.pta.pts.PointsToSet;
 import pascal.taie.analysis.pta.pts.PointsToSetFactory;
 import pascal.taie.config.AnalysisOptions;
+import pascal.taie.ir.exp.InvokeInstanceExp;
+import pascal.taie.ir.exp.InvokeStatic;
 import pascal.taie.ir.exp.Var;
 import pascal.taie.ir.proginfo.MethodRef;
 import pascal.taie.ir.stmt.Copy;
@@ -81,18 +83,15 @@ public class Solver {
 
     private PointerAnalysisResult result;
 
-    private List<CSCallSite> csCallSites;
-
     Solver(AnalysisOptions options, HeapModel heapModel,
            ContextSelector contextSelector) {
         this.options = options;
         this.heapModel = heapModel;
         this.contextSelector = contextSelector;
-        this.csCallSites = new ArrayList<>();
     }
 
-    public List<CSCallSite> getInvokes() {
-        return csCallSites;
+    public CSCallGraph getCallGraph(){
+        return callGraph;
     }
 
     public AnalysisOptions getOptions() {
@@ -175,7 +174,6 @@ public class Solver {
                         // Select(c,l,c':oi)
                         // 根据调用点的信息(上下文,接受对象)选择目标方法的上下文 ct
                         CSCallSite csCallSite = csManager.getCSCallSite(c, l);
-                        csCallSites.add(csCallSite);
                         Context ct = contextSelector.selectContext(csCallSite, m);
                         CSMethod ctMethod = csManager.getCSMethod(ct, m);
                         // 检查调用边是否已经添加过
@@ -318,12 +316,74 @@ public class Solver {
             // 2. Δ
             PointsToSet delta = propagate(n, pts);
             // 3. if n represents a variable x then
-            if (n instanceof CSVar csVar) {
-                Var x = csVar.getVar();
-                Context c = csVar.getContext();
+            if (n instanceof CSVar cx) {
+                Var x = cx.getVar();
+                Context c = cx.getContext();
                 // 3.1 foreach oi in Δ do
                 // TODO taint object 和 普通 object 需要分开处理吗 ?
                 delta.getObjects().forEach(csoi -> {
+                    if (taintAnalysis.isTaintObject(csoi.getObject())) {
+                        Invoke j = taintAnalysis.getSourceCall(csoi.getObject()); // j
+                        assert j != null : "j != null fail";
+
+                        x.getMethod().getIR().forEach(stmt -> {
+                            if (stmt instanceof Invoke invoke) {
+                                Var r = invoke.getLValue(); // result of the invocation, @Nullable
+                                CSVar cr;
+                                if (r != null) {
+                                    cr = csManager.getCSVar(c, r);
+                                } else {
+                                    cr = null;
+                                }
+                                List<Var> args = invoke.getInvokeExp().getArgs();
+                                if (invoke.isStatic()) {
+                                    JMethod callee = resolveCallee(null, invoke);
+                                    for (int i = 0; i < args.size(); i++) {
+                                        Var var = args.get(i);
+                                        if (var != x) {
+                                            continue;
+                                        }
+                                        List<Type> arg2resultTypes = taintAnalysis.getTransfer(callee, i, taintAnalysis.getResult());
+                                        assert arg2resultTypes.size() <= 1 : "arg2resultTypes <= 1 fail";
+
+                                        // TODO add arg-to-result
+                                        add(cr, arg2resultTypes, j);
+                                    }
+                                } else {
+                                    InvokeInstanceExp instanceExp = (InvokeInstanceExp) invoke.getInvokeExp();
+                                    Var base = instanceExp.getBase();
+                                    CSVar csBase = csManager.getCSVar(c, base);
+                                    PointsToSet basePt = csBase.getPointsToSet();
+                                    basePt.forEach(csBaseObj -> {
+                                        JMethod callee = resolveCallee(csBaseObj, invoke);
+                                        if (base == x) {
+                                            List<Type> base2resultTypes = taintAnalysis.getTransfer(callee, taintAnalysis.getBase(), taintAnalysis.getResult());
+                                            assert base2resultTypes.size() <= 1 : "base2resultTypes.size() <= 1 fail";
+                                            // TODO add base-to-result
+                                            add(cr, base2resultTypes, j);
+                                        }
+                                        for (int i = 0; i < args.size(); i++) {
+                                            Var var = args.get(i);
+                                            if (var != x) {
+                                                continue;
+                                            }
+                                            List<Type> arg2baseTypes = taintAnalysis.getTransfer(callee, i, taintAnalysis.getBase());
+                                            assert arg2baseTypes.size() <= 1 : "arg2baseTypes.size() <= 1 fail";
+                                            List<Type> arg2resultTypes = taintAnalysis.getTransfer(callee, i, taintAnalysis.getResult());
+                                            assert arg2resultTypes.size() <= 1 : "arg2resultTypes <= 1 fail";
+
+                                            // TODO 可能重复添加?但没关系?
+                                            // TODO add arg-to-base
+                                            add(csBase, arg2baseTypes, j);
+                                            // TODO add arg-to-result
+                                            add(cr, arg2resultTypes, j);
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                        return;
+                    }
                     // 3.1.1 foreach x.f = y in S do
                     x.getStoreFields().forEach(storeField -> {
                         Var y = storeField.getRValue();
@@ -345,7 +405,6 @@ public class Solver {
                         Var y = loadArray.getLValue();
                         addPFGEdge(csManager.getArrayIndex(csoi), csManager.getCSVar(c, y));
                     });
-                    CSVar cx = csManager.getCSVar(c, x);
                     processCall(cx, csoi); // x.f.someCall ?
                     // TODO add invoke statement use this variable ?
                     // x.getMethod().getIR().forEach(stmt -> {
@@ -409,7 +468,6 @@ public class Solver {
             // TODO m_this 怎么表示? 解决方法:调试到这里,查看m所有属性
             Var m_this = m.getIR().getThis();
             CSCallSite csCallSite = csManager.getCSCallSite(c, l);
-            csCallSites.add(csCallSite);
             // ct = Select(c,l,c':oi)
             Context ct = contextSelector.selectContext(csCallSite, csoi, m); // selectContext(csCallSite, m) -> selectContext(csCallSite, csoi, m)
             CSMethod ctMethod = csManager.getCSMethod(ct, m);

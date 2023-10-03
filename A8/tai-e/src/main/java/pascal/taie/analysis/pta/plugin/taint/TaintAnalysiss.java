@@ -25,10 +25,12 @@ package pascal.taie.analysis.pta.plugin.taint;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import pascal.taie.World;
+import pascal.taie.analysis.graph.callgraph.Edge;
 import pascal.taie.analysis.pta.PointerAnalysisResult;
 import pascal.taie.analysis.pta.core.cs.context.Context;
 import pascal.taie.analysis.pta.core.cs.element.CSCallSite;
 import pascal.taie.analysis.pta.core.cs.element.CSManager;
+import pascal.taie.analysis.pta.core.cs.element.CSMethod;
 import pascal.taie.analysis.pta.core.cs.element.CSVar;
 import pascal.taie.analysis.pta.core.heap.Obj;
 import pascal.taie.analysis.pta.cs.Solver;
@@ -39,6 +41,7 @@ import pascal.taie.language.classes.JMethod;
 import pascal.taie.language.type.Type;
 
 import java.util.*;
+import java.util.stream.Stream;
 
 public class TaintAnalysiss {
 
@@ -132,8 +135,9 @@ public class TaintAnalysiss {
         PointerAnalysisResult result = solver.getResult();
         // TODO - finish me
         // You could query pointer analysis results you need via variable result.
-        List<CSCallSite> invokes = solver.getInvokes();
-        invokes.forEach(csCallSite -> {
+        Stream<Edge<CSCallSite, CSMethod>> edges = solver.getCallGraph().edges();
+        edges.forEach(edge -> {
+            CSCallSite csCallSite = edge.getCallSite();
             Invoke l = csCallSite.getCallSite(); // l
             Context c = csCallSite.getContext();
             MethodRef methodRef = l.getMethodRef();
