@@ -40,21 +40,26 @@ public class _1CallSelector implements ContextSelector {
         return ListContext.make();
     }
 
+// 在调用点敏感中，对静态方法选取上下文的规则和实例方法的相同，
+// 即，对于一个静态方法调用，我们组合调用者方法的上下文与调用点本身，
+// 来构成被调用方法（本次静态方法调用的目标方法）的上下文。
     @Override
     public Context selectContext(CSCallSite callSite, JMethod callee) {
         // TODO - finish me
-        return null;
+        return selectContext(callSite, null, callee);
     }
 
     @Override
     public Context selectContext(CSCallSite callSite, CSObj recv, JMethod callee) {
         // TODO - finish me
-        return null;
+        return ListContext.make(callSite.getCallSite());
     }
-
+// 对每个 k层的 context selector，其堆上下文（heap context）的层数为 k-1 ，
+// 举例来说，对一层调用点敏感（1-call-site sensitivity），堆上下文的层数为 0（即没有堆上下文）；
+// 对两层调用点敏感（2-call-site sensitivity），堆上下文的层数为 1。
     @Override
     public Context selectHeapContext(CSMethod method, Obj obj) {
         // TODO - finish me
-        return null;
+        return getEmptyContext();
     }
 }

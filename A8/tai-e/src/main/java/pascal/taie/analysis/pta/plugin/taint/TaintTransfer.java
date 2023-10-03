@@ -35,6 +35,10 @@ import pascal.taie.language.type.Type;
  *     <li>type: the type of the transferred taint object
  * </ul>
  */
+// 这个 record 类表示污点传播。
+// 在这个类中，我们用整数来表示污点传播被对应方法引发时的 from 变量和 to 变量。
+// 具体来说，一个大于等于 0 的整数 i 表示调用点上被调用方法的第 i 个参数；
+// -1 表示 base 变量；-2 表示接收结果的变量。
 record TaintTransfer(JMethod method, int from, int to, Type type) {
 
     /**

@@ -27,19 +27,28 @@ import org.apache.logging.log4j.Logger;
 import pascal.taie.World;
 import pascal.taie.analysis.pta.PointerAnalysisResult;
 import pascal.taie.analysis.pta.core.cs.context.Context;
+import pascal.taie.analysis.pta.core.cs.element.CSCallSite;
 import pascal.taie.analysis.pta.core.cs.element.CSManager;
+import pascal.taie.analysis.pta.core.cs.element.CSVar;
+import pascal.taie.analysis.pta.core.heap.Obj;
 import pascal.taie.analysis.pta.cs.Solver;
+import pascal.taie.ir.exp.Var;
+import pascal.taie.ir.proginfo.MethodRef;
+import pascal.taie.ir.stmt.Invoke;
+import pascal.taie.language.classes.JMethod;
+import pascal.taie.language.type.Type;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 
 public class TaintAnalysiss {
 
     private static final Logger logger = LogManager.getLogger(TaintAnalysiss.class);
 
+    // 我们也初始化了 TaintManager 对象并将其保存在了 manager 字段中，你可以通过它来管理污点对象
     private final TaintManager manager;
 
+    // 在 TaintAnalysiss 的构造函数中，我们已经给出了解析配置文件的代码，
+    // 并把解析的结果保存在了 config 字段中，你可以直接使用它
     private final TaintConfig config;
 
     private final Solver solver;
@@ -61,17 +70,94 @@ public class TaintAnalysiss {
     }
 
     // TODO - finish me
+    public Set<Obj> getSourceTaintObjs(JMethod method, Invoke l) {
+        Set<Obj> result = new HashSet<>();
+        for (Source source : config.getSources()) {
+            if (source.method() == method) {
+                result.add(manager.makeTaint(l, source.type()));
+            }
+        }
+        return result;
+    }
+
+    public Obj getTaintObj(Invoke l, Type type) {
+        return manager.makeTaint(l, type);
+    }
+
+    public List<Type> getTransfer(JMethod method, int from, int to) {
+        List<Type> result = new ArrayList<>();
+        Set<TaintTransfer> transfers = config.getTransfers();
+        transfers.forEach(taintTransfer -> {
+            if (taintTransfer.method() == method
+             && taintTransfer.from() == from
+             && taintTransfer.to() == to) {
+                result.add(taintTransfer.type());
+            }
+        });
+        return result;
+    }
+
+    public boolean isTaintObject(Obj obj) {
+        return manager.isTaint(obj);
+    }
+
+    public Invoke getSourceCall(Obj obj) {
+        if (isTaintObject(obj)) {
+            return manager.getSourceCall(obj);
+        }
+        return null;
+    }
+
+    public Context getEmptyContext() {
+        return emptyContext;
+    }
+
+    public int getBase() {
+        return TaintTransfer.BASE;
+    }
+
+    public int getResult() {
+        return TaintTransfer.RESULT;
+    }
 
     public void onFinish() {
         Set<TaintFlow> taintFlows = collectTaintFlows();
         solver.getResult().storeResult(getClass().getName(), taintFlows);
     }
 
+    // 返回一个集合，其中包含污点分析检测到的所有 taint flows。
+    // 提示：你可以在这个方法中实现处理 sink 的规则
     private Set<TaintFlow> collectTaintFlows() {
         Set<TaintFlow> taintFlows = new TreeSet<>();
         PointerAnalysisResult result = solver.getResult();
         // TODO - finish me
         // You could query pointer analysis results you need via variable result.
+        List<CSCallSite> invokes = solver.getInvokes();
+        invokes.forEach(csCallSite -> {
+            Invoke l = csCallSite.getCallSite(); // l
+            Context c = csCallSite.getContext();
+            MethodRef methodRef = l.getMethodRef();
+            JMethod m = methodRef.getDeclaringClass().getDeclaredMethod(methodRef.getSubsignature());
+            config.getSinks().forEach(sink -> {
+                if (sink.method() != m) {
+                    return;
+                }
+                int index = sink.index();
+                if (index >= 0) {
+                    assert m != null;
+                    Var arg = l.getInvokeExp().getArg(index);
+                    CSVar csVar = csManager.getCSVar(c, arg);
+                    // CSVar csParam = csManager.getCSVar(c, m.getIR().getParam(index));
+                    csVar.getPointsToSet().forEach(csObj -> {
+                        Obj obj = csObj.getObject();
+                        Invoke j = getSourceCall(obj);
+                        if (j != null) {
+                            taintFlows.add(new TaintFlow(j, l, index));
+                        }
+                    });
+                }
+            });
+        });
         return taintFlows;
     }
 }
